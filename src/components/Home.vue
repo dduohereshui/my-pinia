@@ -1,6 +1,6 @@
 <template>
   <div>
-    home:{{ counter.count }} 双倍:{{ counter.doubleCount }}
+    home:{{ counter.num }}
     <button @click="inc">+1</button>
   </div>
 </template>
@@ -8,11 +8,9 @@
 <script setup lang="ts">
 import { useCounterStore } from "../store/counter";
 const counter = useCounterStore();
-console.log(counter);
-
+// console.log(counter);
 const inc = () => {
-  // counter.num++;
-  counter.increment();
+  counter.num++;
 };
 </script>
 
