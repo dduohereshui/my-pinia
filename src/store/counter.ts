@@ -10,10 +10,14 @@ export const useCounterStore = defineStore("counter", {
     };
   },
   getters: {
-    doubleNum: () => 2,
+    doubleNum(store: any) {
+      return store.num * 2;
+    },
   },
   actions: {
-    increment(nums: number) {},
+    increment(nums: number) {
+      this.num++;
+    },
   },
 });
 
