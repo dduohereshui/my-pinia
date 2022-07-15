@@ -1,8 +1,12 @@
+function isObject(value: any) {
+  return value !== null && typeof value === "object";
+}
 import {
   computed,
   effectScope,
   getCurrentInstance,
   inject,
+  isRef,
   reactive,
   toRefs,
 } from "vue";
@@ -21,6 +25,7 @@ export function defineStore(idOrOptions: any, setup: any) {
     options = idOrOptions;
     id = idOrOptions.id;
   }
+  let isSetupStore = typeof setup === "function" ? true : false;
 
   function useStore() {
     // 这个函数只能在组件中使用
@@ -29,12 +34,14 @@ export function defineStore(idOrOptions: any, setup: any) {
     if (pinia) {
       if (!pinia?._s.has(id)) {
         // 该store没有注册过
-        createOptionsStore(id, options, pinia);
-      } else {
+        if (isSetupStore) {
+          createSetupStore(id, setup, pinia);
+        } else {
+          // 普通的store
+          createOptionsStore(id, options, pinia);
+        }
       }
-
       const store = pinia._s.get(id);
-
       return store;
     }
   }
@@ -49,8 +56,6 @@ export function defineStore(idOrOptions: any, setup: any) {
  */
 function createOptionsStore(id: string, options: any, pinia: Pinia) {
   const { state, getters, actions } = options;
-  const store = reactive({});
-  let scope;
   function setup() {
     pinia.state.value[id] = state ? state() : {};
     // 这里localState 已经是响应式的了，但是内部的值还是普通的对象，所以要用toRefs
@@ -67,13 +72,52 @@ function createOptionsStore(id: string, options: any, pinia: Pinia) {
       }, {})
     );
   }
+  const store = createSetupStore(id, setup, pinia) as any;
+  store.$reset = function () {
+    const newState = state ? state() : {};
+    store.$patch(($state: any) => {
+      Object.assign($state, newState);
+    });
+  };
+  return store;
+}
 
+function createSetupStore(id: string, setup: any, pinia: Pinia) {
+  let scope;
   const setupStore = pinia._e.run(() => {
     // pinia上的scope可以停止所有的store，
     // 这个scope是store内部独有的effectScope
     scope = effectScope();
     return scope.run(() => setup());
   });
+  function mergeReactiveObject(target: any, partialState: any) {
+    for (const key in partialState) {
+      if (!Object.prototype.hasOwnProperty.call(partialState, key)) continue;
+      const oldValue = target[key];
+      const newValue = partialState[key];
+      if (isObject(oldValue) && isObject(newValue) && isRef(newValue)) {
+        target[key] = mergeReactiveObject(oldValue, newValue);
+      } else {
+        target[key] = newValue;
+      }
+    }
+    return target;
+  }
+  function $patch(partialStateOrMutation: any) {
+    if (typeof partialStateOrMutation === "function") {
+      // 是一个mutation
+      mergeReactiveObject(store, partialStateOrMutation());
+    } else {
+      // patch了一个对象
+      mergeReactiveObject(store, partialStateOrMutation);
+    }
+  }
+  // function $reset() {}
+  const partialStore = {
+    $patch,
+    // $reset,
+  };
+  const store = reactive(partialStore);
 
   function wrapAction(actionName: string, action: any): any {
     return function (...args: any[]) {
@@ -92,6 +136,6 @@ function createOptionsStore(id: string, options: any, pinia: Pinia) {
     }
   }
   Object.assign(store, setupStore);
-
   pinia._s.set(id, store);
+  return store;
 }

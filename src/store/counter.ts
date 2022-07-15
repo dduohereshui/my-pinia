@@ -3,10 +3,12 @@ import { computed, reactive, toRefs } from "vue";
 interface CounterState {
   num: number;
 }
+
 export const useCounterStore = defineStore("counter", {
   state: () => {
     return {
       num: 0,
+      fruits: ["apple", "banana", "orange"],
     };
   },
   getters: {
@@ -23,16 +25,16 @@ export const useCounterStore = defineStore("counter", {
 
 // export const useCounterStore = defineStore("counter", () => {
 //   const state = reactive({
-//     count: 0,
+//     num: 0,
 //   });
-//   const doubleCount = computed(() => state.count * 2);
+//   const doubleNum = computed(() => state.num * 2);
 
 //   const increment = () => {
-//     state.count++;
+//     state.num++;
 //   };
 //   return {
 //     ...toRefs(state),
-//     doubleCount,
+//     doubleNum,
 //     increment,
 //   };
 // });
