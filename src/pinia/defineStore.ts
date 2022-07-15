@@ -10,6 +10,7 @@ import {
   reactive,
   toRefs,
 } from "vue";
+import { addSubscription, triggerSubscription } from "./pubsub";
 import { SymbolPinia } from "./rootStore";
 import { Pinia } from "./types";
 interface XX {
@@ -112,17 +113,53 @@ function createSetupStore(id: string, setup: any, pinia: Pinia) {
       mergeReactiveObject(store, partialStateOrMutation);
     }
   }
+  const actionSubscribes: any = [];
   // function $reset() {}
   const partialStore = {
     $patch,
     // $reset,
+    $onAction: addSubscription.bind(null, actionSubscribes),
   };
-  const store = reactive(partialStore);
 
+  const store = reactive(partialStore);
+  Object.defineProperty(store, "$state", {
+    get() {
+      return pinia.state.value[id];
+    },
+    set(state: any) {
+      $patch(($state: any) => Object.assign($state, state));
+    },
+  });
   function wrapAction(actionName: string, action: any): any {
     return function (...args: any[]) {
+      const afterCallbacks: any = [];
+      const errorCallbacks: any = [];
+      function after(cb: any) {
+        afterCallbacks.push(cb);
+      }
+      function onError(cb: any) {
+        errorCallbacks.push(cb);
+      }
+      triggerSubscription(actionSubscribes, { after, onError, actionName });
       // 后续可能会做异步调用
-      let result = action.apply(store, args);
+      let result: any;
+      try {
+        result = action.apply(store, args);
+      } catch (error: any) {
+        triggerSubscription(errorCallbacks, error);
+      }
+      if (result instanceof Promise) {
+        return result
+          .then((res: any) => {
+            triggerSubscription(afterCallbacks, res);
+          })
+          .catch((err: any) => {
+            triggerSubscription(errorCallbacks, err);
+            return Promise.reject(err);
+          });
+      } else {
+        triggerSubscription(afterCallbacks, result);
+      }
       return result;
     };
   }
